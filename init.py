@@ -1,6 +1,9 @@
 """
 Descargador automático de archivos ZIP desde el portal SEPS.
 Requiere un archivo .env con SEPS_USUARIO y SEPS_CLAVE definidos.
+
+Las pausas entre acciones están calibradas para simular comportamiento
+humano y evitar bloqueos de IP — no reducir estos tiempos.
 """
 
 import os
@@ -27,6 +30,15 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger(__name__)
+
+
+# ─────────────────────────────────────────────
+# Pausa humana — NO modificar estos tiempos
+# ─────────────────────────────────────────────
+def esperar(segundos=2):
+    """Pausa que simula tiempo de reacción humano entre acciones."""
+    time.sleep(segundos)
+
 
 # ─────────────────────────────────────────────
 # Configuración
@@ -62,6 +74,7 @@ def cargar_config() -> Config:
     download_dir.mkdir(parents=True, exist_ok=True)
     return Config(usuario=usuario, clave=clave, download_dir=download_dir)
 
+
 # ─────────────────────────────────────────────
 # Navegador
 # ─────────────────────────────────────────────
@@ -77,12 +90,14 @@ def crear_driver(download_dir: Path) -> webdriver.Firefox:
     options.set_preference("dom.webnotifications.enabled", False)
     return webdriver.Firefox(options=options)
 
+
 # ─────────────────────────────────────────────
 # Utilidades
 # ─────────────────────────────────────────────
 def scroll_into_view(driver: webdriver.Firefox, element) -> None:
+    """Desplaza el elemento al centro de la vista y espera como un humano."""
     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
-    time.sleep(1)
+    time.sleep(1)  # pausa original — no reducir
 
 
 def scroll_hasta_cargar_todos(driver: webdriver.Firefox, max_intentos: int = 5) -> None:
@@ -102,40 +117,41 @@ def scroll_hasta_cargar_todos(driver: webdriver.Firefox, max_intentos: int = 5) 
             cantidad_anterior = cantidad_actual
 
         driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", contenedor)
-        time.sleep(1.5)
+        time.sleep(1.5)  # pausa original — no reducir
 
     log.info(f"Scroll completado — elementos detectados: {cantidad_anterior}")
 
 
 def clic_en_nodo(driver: webdriver.Firefox, wait: WebDriverWait, texto: str) -> None:
-    """Busca un nodo del árbol por texto y hace clic vía JS."""
+    """Busca un nodo del árbol por texto, hace scroll y clic con pausa humana."""
     elemento = wait.until(
         EC.presence_of_element_located((By.XPATH, f"//span[text()='{texto}']"))
     )
     scroll_into_view(driver, elemento)
     driver.execute_script("arguments[0].click();", elemento)
-    time.sleep(1.5)
+    esperar()  # 2 segundos — pausa original entre clics de navegación
     log.info(f"Carpeta abierta: {texto}")
+
 
 # ─────────────────────────────────────────────
 # Flujo principal
 # ─────────────────────────────────────────────
 def iniciar_sesion(driver: webdriver.Firefox, wait: WebDriverWait, config: Config) -> None:
     driver.get(config.login_url)
-    time.sleep(2)
+    esperar()  # 2s — esperar carga de página
 
     wait.until(EC.presence_of_element_located((By.NAME, "j_idt21:j_idt28"))).send_keys(config.usuario)
-    time.sleep(1)
+    esperar()  # 2s — pausa entre campos como un humano
     driver.find_element(By.NAME, "j_idt21:j_idt30").send_keys(config.clave)
-    time.sleep(1)
+    esperar()  # 2s — pausa antes de hacer clic en login
     driver.find_element(By.ID, "j_idt21:j_idt33").click()
-    time.sleep(10)
+    time.sleep(10)  # esperar carga completa tras login — no reducir
     log.info("Sesión iniciada.")
 
 
 def navegar_a_carpeta(driver: webdriver.Firefox, wait: WebDriverWait, config: Config) -> None:
     wait.until(EC.presence_of_element_located((By.LINK_TEXT, "Casillero SEPS"))).click()
-    time.sleep(1.5)
+    esperar()  # 2s — esperar apertura del casillero
 
     for carpeta in config.ruta_carpetas:
         clic_en_nodo(driver, wait, carpeta)
@@ -148,15 +164,16 @@ def descargar_archivo(
     download_dir: Path,
     timeout: int,
 ) -> bool:
-    """Descarga un archivo con doble clic. Retorna True si tuvo éxito."""
+    """Descarga un archivo con doble clic respetando pausas humanas."""
     nombre = div.get_attribute("title").strip()
     ruta_destino = download_dir / nombre
 
     try:
         scroll_into_view(driver, div)
-        time.sleep(0.5)
+        esperar(0.5)  # pequeña pausa antes del doble clic — pausa original
+
         actions.move_to_element(div).double_click().perform()
-        time.sleep(1)
+        esperar(1)  # pausa tras doble clic — pausa original
 
         for _ in range(timeout):
             archivo_parcial = Path(str(ruta_destino) + ".part")
@@ -180,7 +197,7 @@ def descargar_todos_los_zips(
     config: Config,
 ) -> None:
     wait.until(EC.presence_of_element_located((By.CLASS_NAME, "elfinder-cwd")))
-    time.sleep(1.5)
+    esperar()  # 2s — esperar render del contenedor
     scroll_hasta_cargar_todos(driver)
 
     zip_divs = driver.find_elements(
@@ -198,9 +215,10 @@ def descargar_todos_los_zips(
             exitosos += 1
         else:
             fallidos += 1
-        time.sleep(1)
+        esperar(1)  # 1s entre descargas — pausa original
 
     log.info(f"Resumen — ✅ Exitosos: {exitosos} | ❌ Fallidos: {fallidos}")
+
 
 # ─────────────────────────────────────────────
 # Entrada
