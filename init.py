@@ -1,11 +1,3 @@
-"""
-Descargador automático de archivos ZIP desde el portal SEPS.
-Requiere un archivo .env con SEPS_USUARIO y SEPS_CLAVE definidos.
-
-Las pausas entre acciones están calibradas para simular comportamiento
-humano y evitar bloqueos de IP — no reducir estos tiempos.
-"""
-
 import os
 import time
 import logging
@@ -21,9 +13,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException, WebDriverException
 
-# ─────────────────────────────────────────────
 # Logs
-# ─────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -32,17 +22,13 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-# ─────────────────────────────────────────────
-# Pausa humana — NO modificar estos tiempos
-# ─────────────────────────────────────────────
-def esperar(segundos=2):
+# Pausa — evita bloqueo de ip
+def esperar(segundos=5):
     """Pausa que simula tiempo de reacción humano entre acciones."""
     time.sleep(segundos)
 
 
-# ─────────────────────────────────────────────
 # Configuración
-# ─────────────────────────────────────────────
 @dataclass
 class Config:
     usuario: str
@@ -55,7 +41,7 @@ class Config:
     download_timeout: int = 90
     # ↓ Cambia solo aquí cuando cambie la fecha o carpeta
     ruta_carpetas: tuple = field(
-        default_factory=lambda: ("Providencias_Judiciales", "2026", "MARZO", "16-04-2026")
+        default_factory=lambda: ("Providencias_Judiciales", "2026", "MARZO", "17-03-2026")
     )
 
 
@@ -75,9 +61,7 @@ def cargar_config() -> Config:
     return Config(usuario=usuario, clave=clave, download_dir=download_dir)
 
 
-# ─────────────────────────────────────────────
 # Navegador
-# ─────────────────────────────────────────────
 def crear_driver(download_dir: Path) -> webdriver.Firefox:
     """Inicializa Firefox con preferencias de descarga silenciosa."""
     options = Options()
@@ -91,9 +75,7 @@ def crear_driver(download_dir: Path) -> webdriver.Firefox:
     return webdriver.Firefox(options=options)
 
 
-# ─────────────────────────────────────────────
 # Utilidades
-# ─────────────────────────────────────────────
 def scroll_into_view(driver: webdriver.Firefox, element) -> None:
     """Desplaza el elemento al centro de la vista y espera como un humano."""
     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
@@ -133,25 +115,23 @@ def clic_en_nodo(driver: webdriver.Firefox, wait: WebDriverWait, texto: str) -> 
     log.info(f"Carpeta abierta: {texto}")
 
 
-# ─────────────────────────────────────────────
 # Flujo principal
-# ─────────────────────────────────────────────
 def iniciar_sesion(driver: webdriver.Firefox, wait: WebDriverWait, config: Config) -> None:
     driver.get(config.login_url)
-    esperar()  # 2s — esperar carga de página
+    esperar()
 
     wait.until(EC.presence_of_element_located((By.NAME, "j_idt21:j_idt28"))).send_keys(config.usuario)
-    esperar()  # 2s — pausa entre campos como un humano
+    esperar()  
     driver.find_element(By.NAME, "j_idt21:j_idt30").send_keys(config.clave)
-    esperar()  # 2s — pausa antes de hacer clic en login
+    esperar()
     driver.find_element(By.ID, "j_idt21:j_idt33").click()
-    time.sleep(10)  # esperar carga completa tras login — no reducir
+    time.sleep(10)
     log.info("Sesión iniciada.")
 
 
 def navegar_a_carpeta(driver: webdriver.Firefox, wait: WebDriverWait, config: Config) -> None:
     wait.until(EC.presence_of_element_located((By.LINK_TEXT, "Casillero SEPS"))).click()
-    esperar()  # 2s — esperar apertura del casillero
+    esperar()
 
     for carpeta in config.ruta_carpetas:
         clic_en_nodo(driver, wait, carpeta)
@@ -170,10 +150,10 @@ def descargar_archivo(
 
     try:
         scroll_into_view(driver, div)
-        esperar(0.5)  # pequeña pausa antes del doble clic — pausa original
+        esperar(0.5)
 
         actions.move_to_element(div).double_click().perform()
-        esperar(1)  # pausa tras doble clic — pausa original
+        esperar(1) 
 
         for _ in range(timeout):
             archivo_parcial = Path(str(ruta_destino) + ".part")
@@ -182,7 +162,7 @@ def descargar_archivo(
                 return True
             time.sleep(1)
 
-        log.warning(f"⏰ Timeout al descargar: {nombre}")
+        log.error(f"❌ Timeout, no se descargo el archivo: {nombre}")
         return False
 
     except WebDriverException as e:
@@ -197,7 +177,7 @@ def descargar_todos_los_zips(
     config: Config,
 ) -> None:
     wait.until(EC.presence_of_element_located((By.CLASS_NAME, "elfinder-cwd")))
-    esperar()  # 2s — esperar render del contenedor
+    esperar()  # 5s — esperar render del contenedor
     scroll_hasta_cargar_todos(driver)
 
     zip_divs = driver.find_elements(
@@ -215,7 +195,7 @@ def descargar_todos_los_zips(
             exitosos += 1
         else:
             fallidos += 1
-        esperar(1)  # 1s entre descargas — pausa original
+        esperar(1)
 
     log.info(f"Resumen — ✅ Exitosos: {exitosos} | ❌ Fallidos: {fallidos}")
 
