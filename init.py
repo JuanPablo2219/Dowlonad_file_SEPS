@@ -41,7 +41,7 @@ class Config:
     download_timeout: int = 90
     # ↓ Cambia solo aquí cuando cambie la fecha o carpeta
     ruta_carpetas: tuple = field(
-        default_factory=lambda: ("Providencias_Judiciales", "2026", "MARZO", "17-03-2026")
+        default_factory=lambda: ("Providencias_Judiciales", "2026", "MAYO", "05-05-2026")
     )
 
 
@@ -83,25 +83,37 @@ def scroll_into_view(driver: webdriver.Firefox, element) -> None:
 
 
 def scroll_hasta_cargar_todos(driver: webdriver.Firefox, max_intentos: int = 5) -> None:
-    """Hace scroll en el contenedor hasta que no aparezcan más archivos."""
+    """Hace scroll hasta cargar todos los archivos ZIP."""
+    
     contenedor = driver.find_element(By.CLASS_NAME, "elfinder-cwd-wrapper")
+
     cantidad_anterior = -1
     intentos_sin_cambio = 0
 
     while intentos_sin_cambio < max_intentos:
+
+        # SOLO archivos .zip
         cantidad_actual = len(
-            driver.find_elements(By.XPATH, "//div[contains(@class, 'elfinder-cwd-file')]")
+            driver.find_elements(
+                By.XPATH,
+                "//div[contains(@class, 'elfinder-cwd-filename') and contains(@title, '.zip')]"
+            )
         )
+
         if cantidad_actual == cantidad_anterior:
             intentos_sin_cambio += 1
         else:
             intentos_sin_cambio = 0
             cantidad_anterior = cantidad_actual
 
-        driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", contenedor)
-        time.sleep(1.5)  # pausa original — no reducir
+        driver.execute_script(
+            "arguments[0].scrollTop = arguments[0].scrollHeight",
+            contenedor
+        )
 
-    log.info(f"Scroll completado — elementos detectados: {cantidad_anterior}")
+        time.sleep(1.5)
+
+    log.info(f"✅ Total de archivos ZIP detectados: {cantidad_anterior}")
 
 
 def clic_en_nodo(driver: webdriver.Firefox, wait: WebDriverWait, texto: str) -> None:
